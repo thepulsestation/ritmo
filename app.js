@@ -45,7 +45,7 @@ async function load(initial=false){
   if(!state.user)return;state.loading=true;state.error=null;
   try{
     const owner=await db.from('ritmo_owners').select('user_id,notifications_enabled').eq('user_id',state.user.id).maybeSingle();if(owner.error)throw owner.error;if(!owner.data)throw new Error('Esta cuenta no tiene acceso a Ritmo. Usa el correo autorizado para esta agenda.');
-    const {data,error}=await db.from('ritmo_tasks').select('*').order('starts_at');if(error)throw error;state.tasks=data;state.notifications=owner.data.notifications_enabled;
+    const tasks=[];for(let offset=0;;offset+=1000){const {data,error}=await db.from('ritmo_tasks').select('*').order('starts_at').order('id').range(offset,offset+999);if(error)throw error;tasks.push(...data);if(data.length<1000)break;}state.tasks=tasks;state.notifications=owner.data.notifications_enabled;
     if(initial&&!todayTasks().length){const next=state.tasks.find(t=>new Date(t.starts_at)>new Date());if(next)state.date=dateKey(new Date(next.starts_at));}
     const health=await db.from('ritmo_health').select('checked_at').eq('id',1).maybeSingle();if(!health.error)state.health=health.data;
   }catch(error){state.error=errorMessage(error);}finally{state.loading=false;render();}
