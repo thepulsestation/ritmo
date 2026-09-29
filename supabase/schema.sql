@@ -95,7 +95,7 @@ begin
   if new_start<now()then raise exception 'Elige un horario futuro para el nuevo bloque.';end if;
   if exists(select 1 from public.ritmo_tasks where user_id=uid and source_task_id=task_id and status in ('pending','active'))then raise exception 'Ya hay una continuación pendiente de esta tarea. Revisa la agenda.';end if;
   perform public.ritmo_check_slot(uid,new_start,new_end,task_id);
-  insert into public.ritmo_tasks(user_id,title,starts_at,ends_at,category,priority,notes,recurrence,source_task_id)values(uid,t.title,new_start,new_end,t.category,t.priority,concat_ws(E'\n',nullif(t.notes,''),nullif(t.review,'')),t.recurrence,t.id)returning id into result;
+  insert into public.ritmo_tasks(user_id,title,starts_at,ends_at,category,priority,notes,recurrence,source_task_id)values(uid,t.title,new_start,new_end,t.category,t.priority,left(concat_ws(E'\n',nullif(t.notes,''),nullif(t.review,'')),4000),t.recurrence,t.id)returning id into result;
   if t.status in ('pending','active')then update public.ritmo_tasks set status='postponed',actual_end=now(),updated_at=now()where id=task_id;end if;
   insert into public.ritmo_events(user_id,task_id,event,details)values(uid,task_id,'rescheduled',jsonb_build_object('new_task_id',result,'starts_at',new_start));return result;
 end;$$;
