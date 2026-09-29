@@ -9,10 +9,15 @@ export function dateKey(date = new Date()) {
 export function addDays(key, days=1) { const d=new Date(key+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+days); return d.toISOString().slice(0,10); }
 export function madridTime(day, time) {
   const utc = new Date(`${day}T${time}:00Z`);
-  const parts = new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Madrid',timeZoneName:'shortOffset'}).formatToParts(utc);
-  const offset = parts.find(p=>p.type==='timeZoneName').value.match(/GMT([+-])(\d+)(?::(\d+))?/);
-  const minutes=offset ? (offset[1]==='+'?1:-1)*(Number(offset[2])*60+Number(offset[3]||0)) : 0;
-  return new Date(utc.getTime()-minutes*60000).toISOString();
+  // Inspect both sides of a DST transition; prefer the later occurrence of an ambiguous hour.
+  const offsets=new Set([-12,0,12].map(hours=>{
+    const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Madrid',timeZoneName:'shortOffset'}).formatToParts(new Date(utc.getTime()+hours*3600000));
+    const m=parts.find(p=>p.type==='timeZoneName').value.match(/GMT([+-])(\d+)(?::(\d+))?/);
+    return m?(m[1]==='+'?1:-1)*(Number(m[2])*60+Number(m[3]||0)):0;
+  }));
+  const candidates=[...offsets].map(minutes=>new Date(utc.getTime()-minutes*60000)).filter(d=>dateKey(d)===day&&timeLabel(d)===time).sort((a,b)=>b-a);
+  if(!candidates.length)throw new Error('Esa hora no existe en Madrid por el cambio de hora. Elige otro horario.');
+  return candidates[0].toISOString();
 }
 export function timeLabel(iso) { return new Intl.DateTimeFormat('es-ES',{timeZone:'Europe/Madrid',hour:'2-digit',minute:'2-digit'}).format(new Date(iso)); }
 export function dayLabel(key) { return new Intl.DateTimeFormat('es-ES',{timeZone:'Europe/Madrid',weekday:'long',day:'numeric',month:'long'}).format(new Date(key+'T12:00:00Z')); }
@@ -40,7 +45,9 @@ export function parsePlan(raw, day) {
     if(!CATEGORIES[t.category||'personal'])throw new Error(`Categoría no válida en la tarea ${i+1}.`);
     const priority=t.priority||'media'; if(!['alta','media','baja'].includes(priority))throw new Error(`Prioridad no válida en la tarea ${i+1}.`);
     if(t.end<=t.start)throw new Error(`La tarea ${i+1} debe terminar después de empezar, dentro del mismo día.`);
-    return {title:t.title.trim(),starts_at:madridTime(day,t.start),ends_at:madridTime(day,t.end),category:t.category||'personal',priority,notes:String(t.notes||'').slice(0,4000),recurrence:t.recurrence==='daily'?'daily':'none',status:'pending'};
+    const item={title:t.title.trim(),starts_at:madridTime(day,t.start),ends_at:madridTime(day,t.end),category:t.category||'personal',priority,notes:String(t.notes||'').slice(0,4000),recurrence:t.recurrence==='daily'?'daily':'none',status:'pending'};
+    if(duration(item)<5||duration(item)>720)throw new Error(`La tarea ${i+1} debe durar entre 5 minutos y 12 horas.`);
+    return item;
   }).sort((a,b)=>a.starts_at.localeCompare(b.starts_at));
   result.forEach((t,i)=>{if(i&&t.starts_at<result[i-1].ends_at)throw new Error(`«${t.title}» se solapa con «${result[i-1].title}».`);});
   return result;

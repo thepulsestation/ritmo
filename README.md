@@ -4,7 +4,7 @@ Agenda personal instalable, publicada en GitHub Pages y respaldada por Supabase.
 
 ## Uso
 
-1. Iniciar sesión con la cuenta personal autorizada.
+1. Solicitar el enlace de acceso con el correo personal autorizado. En la app instalada del iPhone, mantener pulsado «Sign in» en el correo, copiar el enlace y pegarlo en Ritmo. También se puede abrir directamente en Safari. La sesión se conserva.
 2. Empezar un bloque y cerrarlo como completado, continuación, reprogramado o descartado. Añadir notas y valoración opcional.
 3. En **Preparar mañana**, copiar el resumen para el chat. Pegar el plan recibido, revisar y guardar.
 4. Las tareas diarias se copian con **Copiar rutina**. Los horarios que ya están ocupados se conservan.
@@ -22,6 +22,6 @@ Supabase Cron llama a `ritmo-push` cada minuto. El endpoint comprueba un secreto
 
 Los horarios usan `Europe/Madrid`, incluido el cambio estacional de hora. La frecuencia del trabajo programado da una precisión de aproximadamente un minuto, y el sistema operativo o el modo de concentración pueden retrasar la entrega. En iPhone se debe instalar en la pantalla de inicio para permitir Web Push.
 
-El service worker guarda solo archivos de la interfaz. No guarda respuestas de Supabase ni una copia local de la agenda. La sesión permanece en el navegador mediante el cliente oficial Supabase JS 2.117.2; los cambios necesitan conexión. Enlaces de acceso deben abrirse en el mismo navegador o app instalada donde se solicitaron.
+El service worker guarda solo archivos de la interfaz. No guarda respuestas de Supabase ni una copia local de la agenda. La sesión permanece en el navegador mediante el cliente oficial Supabase JS 2.117.2; los cambios necesitan conexión. El correo gratuito de Supabase tiene una cuota reducida y solo envía a miembros de la organización. La cuenta personal autorizada es miembro. Si el enlace caduca, solicitar uno nuevo; el último enlace recibido sustituye al anterior.
 
 No hay auto-importación de planes ni agentes autónomos dentro de la aplicación. El flujo diario se realiza entre la persona y su chat.
