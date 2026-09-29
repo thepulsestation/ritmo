@@ -9,12 +9,15 @@ export function dateKey(date = new Date()) {
 export function addDays(key, days=1) { const d=new Date(key+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+days); return d.toISOString().slice(0,10); }
 export function madridTime(day, time) {
   const utc = new Date(`${day}T${time}:00Z`);
-  const parts = new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Madrid',timeZoneName:'shortOffset'}).formatToParts(utc);
-  const offset = parts.find(p=>p.type==='timeZoneName').value.match(/GMT([+-])(\d+)(?::(\d+))?/);
-  const minutes=offset ? (offset[1]==='+'?1:-1)*(Number(offset[2])*60+Number(offset[3]||0)) : 0;
-  const result=new Date(utc.getTime()-minutes*60000);
-  if(dateKey(result)!==day||timeLabel(result)!==time)throw new Error('Esa hora no existe en Madrid por el cambio de hora. Elige otro horario.');
-  return result.toISOString();
+  // Inspect both sides of a DST transition; prefer the later occurrence of an ambiguous hour.
+  const offsets=new Set([-12,0,12].map(hours=>{
+    const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Madrid',timeZoneName:'shortOffset'}).formatToParts(new Date(utc.getTime()+hours*3600000));
+    const m=parts.find(p=>p.type==='timeZoneName').value.match(/GMT([+-])(\d+)(?::(\d+))?/);
+    return m?(m[1]==='+'?1:-1)*(Number(m[2])*60+Number(m[3]||0)):0;
+  }));
+  const candidates=[...offsets].map(minutes=>new Date(utc.getTime()-minutes*60000)).filter(d=>dateKey(d)===day&&timeLabel(d)===time).sort((a,b)=>b-a);
+  if(!candidates.length)throw new Error('Esa hora no existe en Madrid por el cambio de hora. Elige otro horario.');
+  return candidates[0].toISOString();
 }
 export function timeLabel(iso) { return new Intl.DateTimeFormat('es-ES',{timeZone:'Europe/Madrid',hour:'2-digit',minute:'2-digit'}).format(new Date(iso)); }
 export function dayLabel(key) { return new Intl.DateTimeFormat('es-ES',{timeZone:'Europe/Madrid',weekday:'long',day:'numeric',month:'long'}).format(new Date(key+'T12:00:00Z')); }
