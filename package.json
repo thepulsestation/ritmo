@@ -1,0 +1,1 @@
+{"name":"ritmo-personal","private":true,"type":"module","scripts":{"test":"node --test tests/domain.test.js","dev":"node scripts/serve.mjs","prepare":"node scripts/prepare.mjs"},"engines":{"node":">=22"}}
