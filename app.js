@@ -1,7 +1,7 @@
 import {calendarHTML,calendarDraft,calendarBlocks,calendarConflicts,bindCalendarGestures,clockMinutes,minuteClock,PIXELS_PER_MINUTE} from './calendar.js?v=11';
 import {rhythmInsights} from './insights.js?v=11';
 import {planInstructions,chatSummary,agendaContext,allForChat} from './planning.js?v=11';
-import {bindTaskSwipes} from './task-swipe.js?v=12';
+import {bindTaskSwipes} from './task-swipe.js?v=13';
 import {config} from './config.js';
 import {passwordError,magicLinkToken,notificationSupport} from './access.js';
 import {CLOSED,CATEGORIES,STATUS,escapeHtml as esc,dateKey,addDays,madridTime,timeLabel,dayLabel,duration,formatDuration,goalDuration,actualDuration,taskDay,organizerItems,organizerNoCooking,habits,currentTask,parsePlan,summaryText,WEEKDAYS,repeatDays,repeatLabel,recurrenceFor} from './domain.js?v=11';
