@@ -12,11 +12,15 @@ Agenda personal instalable, publicada en GitHub Pages y respaldada por Supabase.
 
 ## Desarrollo
 
-Aplicación estática sin compilación: `node scripts/serve.mjs`. Pruebas: `npm test`. Preparar la función: `node scripts/prepare.mjs`. Para una instalación nueva usar `supabase/schema.sql`; para actualizar una instalación anterior aplicar solo `supabase/migrations/20260930_adaptive.sql`.
+Aplicación estática sin compilación: `node scripts/serve.mjs`. Pruebas: `npm test`. Preparar la función: `node scripts/prepare.mjs`. Para una instalación nueva usar `supabase/schema.sql`; para actualizar una instalación anterior aplicar, en orden, `supabase/migrations/20260930_adaptive.sql` y `supabase/migrations/20260930_reorganize.sql`.
 
 ## Agenda adaptable
 
-**Me he retrasado · Reajustar el día** permite llevar el primer bloque pendiente a la hora actual o añadir minutos de retraso. Trabajo y comida son horarios fijos por defecto, y cada tarea permite cambiar esa preferencia. Los retrasos se absorben al llegar a un bloque fijo; las tareas flexibles que ya no caben quedan como **Pendiente de recolocar**, sin borrarse. Un bloque fijo iniciado tarde conserva su hora de fin. Un bloque flexible se acorta si su duración invadiría el próximo horario fijo; el objetivo original permanece visible en la vista previa y el balance.
+**Reorganizar mi día** reúne los bloques pendientes y los que quedaron sin hueco. Permite cambiar su orden de prioridad, minutos, inclusión y horarios fijos del día. **Hoy no cocino** propone reservar 30 minutos para comer y descansar. Se puede revisar y cambiar esa duración antes de guardar. Las horas fijas del trabajo y la comida se conservan por defecto; las excepciones del día no modifican la rutina de mañana ni las horas objetivo.
+
+El servidor busca huecos reales entre los bloques fijos, colocando primero las tareas elegidas con más prioridad. Una tarea corta puede aprovechar un hueco que no sirve para una larga. La vista previa muestra todas las horas resultantes y las tareas que todavía no caben; **Cambiar el ajuste** conserva los cambios del formulario. Desmarcar **Hacer hoy** deja el bloque pendiente, sin borrarlo. Los bloques activos y revisados quedan protegidos.
+
+**Quiero continuar después** ofrece por defecto buscar un hueco y programar avisos. Se eligen el día y los minutos que faltan, o una hora manual. La vista previa confirma el siguiente horario antes de cerrar el bloque original y crear una continuación enlazada. Ambos cambios se guardan en una sola transacción; si la hora está ocupada, el bloque original sigue sin cambios. También se puede elegir explícitamente dejarla pendiente sin aviso. Las continuaciones antiguas sin un bloque futuro aparecen en el reorganizador.
 
 El planificador reajusta las tareas pendientes cada minuto cuando se alarga el bloque activo, aunque los avisos estén pausados o la app esté cerrada. Conserva su hora de fin como referencia para los avisos de cambio; una marca de avance evita aplicar dos veces el mismo retraso. Cada escritura de agenda usa el bloqueo transaccional del propietario. Los bloques cerrados se muestran con su intervalo real cuando existe, dejando visible el objetivo. El balance compara objetivo, horario ajustado y tiempo real. Las duraciones habituales usan la mediana de registros completados o continuados; menos de tres se etiquetan como primeros registros. El resumen para el chat incluye estos datos.
 
