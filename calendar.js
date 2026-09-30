@@ -63,6 +63,13 @@ export function bindCalendarGestures({getDraft,onChange,onMessage}){
   document.addEventListener('pointermove',e=>{if(gesture&&gesture.pointer===e.pointerId){gesture.x=e.clientX;gesture.y=e.clientY;if(!gesture.active&&e.pointerType==='mouse'&&Math.hypot(e.clientX-gesture.originX,e.clientY-gesture.originY)>4){clearTimeout(gesture.timer);gesture.activate();}if(gesture.active)e.preventDefault();}},{passive:false});
   document.addEventListener('pointerup',e=>{
     if(!gesture||gesture.pointer!==e.pointerId)return;
+    if(gesture.active){
+      const grid=document.getElementById('calendar-grid'),scroll=document.getElementById('calendar-scroll');
+      if(grid&&scroll){const rect=scroll.getBoundingClientRect(),target=(e.clientY-grid.getBoundingClientRect().top)/PIXELS_PER_MINUTE;
+        gesture.next=snapGesture({mode:gesture.mode,start:gesture.start,minutes:gesture.minutes,delta:target-gesture.anchor,target:gesture.mode==='place'?target:undefined});
+        gesture.inside=gesture.mode!=='place'||e.clientY>=rect.top&&e.clientY<=rect.bottom&&e.clientX>=rect.left&&e.clientX<=rect.right;
+      }
+    }
     if(gesture.active&&gesture.next&&gesture.inside){const item=getDraft()?.items.find(i=>i.id===gesture.id);if(item){Object.assign(item,gesture.next,{placed:true});suppressUntil=Date.now()+500;cancel();onChange();return;}}
     if(gesture.active)suppressUntil=Date.now()+500;cancel();
   });

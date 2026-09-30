@@ -2,9 +2,11 @@ import {actualDuration,goalDuration} from './domain.js';
 
 const median=values=>{const v=[...values].sort((a,b)=>a-b),n=v.length;return n?Math.round(n%2?v[(n-1)/2]:(v[n/2-1]+v[n/2])/2):0;};
 export function rhythmInsights(tasks){
-  const groups=new Map();
+  const groups=new Map(),byId=new Map(tasks.map(t=>[t.id,t]));
   for(const t of tasks){
     if(t.status!=='completed'||!t.actual_start||!t.actual_end)continue;
+    // Finishing the remainder of a continued task is a partial occurrence.
+    if(t.recurrence!=='daily'&&byId.get(t.source_task_id)?.status==='continued')continue;
     const real=actualDuration(t);if(real<1)continue;
     const key=t.routine_id||`${t.category}:${t.title.trim().toLocaleLowerCase('es').replace(/\s+/g,' ')}`;
     if(!groups.has(key))groups.set(key,[]);groups.get(key).push({task:t,real,goal:goalDuration(t),at:t.actual_end});

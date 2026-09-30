@@ -1,5 +1,5 @@
-import {calendarHTML,calendarDraft,calendarBlocks,calendarConflicts,bindCalendarGestures,clockMinutes,minuteClock,PIXELS_PER_MINUTE} from './calendar.js?v=8';
-import {rhythmInsights} from './insights.js?v=8';
+import {calendarHTML,calendarDraft,calendarBlocks,calendarConflicts,bindCalendarGestures,clockMinutes,minuteClock,PIXELS_PER_MINUTE} from './calendar.js?v=9';
+import {rhythmInsights} from './insights.js?v=9';
 import {config} from './config.js';
 import {passwordError,magicLinkToken,notificationSupport} from './access.js';
 import {CLOSED,CATEGORIES,STATUS,escapeHtml as esc,dateKey,addDays,madridTime,timeLabel,dayLabel,duration,goalDuration,actualDuration,taskDay,organizerItems,organizerNoCooking,habits,currentTask,parsePlan,summaryText} from './domain.js';
