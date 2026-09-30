@@ -1,6 +1,14 @@
 export const CLOSED = ['completed', 'continued', 'postponed', 'skipped'];
 export const CATEGORIES = { personal: 'Personal', work: 'Trabajo', business: 'Empresa', english: 'Inglés', meals: 'Comida', rest: 'Descanso' };
 export const STATUS = { pending:'Pendiente', active:'En curso', completed:'Completada', continued:'Continuar después', postponed:'Pasada a otro día', skipped:'Descartada', deferred:'Pendiente de recolocar' };
+export const WEEKDAYS=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+export function repeatDays(t){
+  if(t.recurrence_days!==undefined){if(!Array.isArray(t.recurrence_days)||t.recurrence_days.some(d=>!Number.isInteger(d)||d<1||d>7))throw new Error('Elige días de la semana válidos.');return [...new Set(t.recurrence_days)].sort((a,b)=>a-b);}
+  if(t.recurrence==='weekly')throw new Error('Elige los días de la repetición semanal.');
+  return t.recurrence==='daily'?[1,2,3,4,5,6,7]:[];
+}
+export const recurrenceFor=days=>days.length===7?'daily':days.length?'weekly':'none';
+export function repeatLabel(t){const d=repeatDays(t);return d.length===7?'Cada día':d.length===5&&d.join(',')==='1,2,3,4,5'?'Lunes a viernes':d.map(n=>WEEKDAYS[n-1].slice(0,3).toLocaleLowerCase('es')).join(', ');}
 export const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function dateKey(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Madrid',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);
@@ -64,7 +72,8 @@ export function parsePlan(raw, day) {
     if(!CATEGORIES[t.category||'personal'])throw new Error(`Categoría no válida en la tarea ${i+1}.`);
     const priority=t.priority||'media'; if(!['alta','media','baja'].includes(priority))throw new Error(`Prioridad no válida en la tarea ${i+1}.`);
     if(t.end<=t.start)throw new Error(`La tarea ${i+1} debe terminar después de empezar, dentro del mismo día.`);
-    const item={title:t.title.trim(),starts_at:madridTime(day,t.start),ends_at:madridTime(day,t.end),category:t.category||'personal',priority,notes:String(t.notes||'').slice(0,4000),recurrence:t.recurrence==='daily'?'daily':'none',fixed_time:typeof t.fixed_time==='boolean'?t.fixed_time:['work','meals'].includes(t.category),status:'pending'};
+    const days=repeatDays(t);
+    const item={title:t.title.trim(),starts_at:madridTime(day,t.start),ends_at:madridTime(day,t.end),category:t.category||'personal',priority,notes:String(t.notes||'').slice(0,4000),recurrence:recurrenceFor(days),recurrence_days:days,fixed_time:typeof t.fixed_time==='boolean'?t.fixed_time:['work','meals'].includes(t.category),status:'pending'};
     if(duration(item)<5||duration(item)>720)throw new Error(`La tarea ${i+1} debe durar entre 5 minutos y 12 horas.`);
     return item;
   }).sort((a,b)=>a.starts_at.localeCompare(b.starts_at));
@@ -72,8 +81,8 @@ export function parsePlan(raw, day) {
   return result;
 }
 export function summaryText(tasks, day) {
-  const lines=tasks.map(t=>`- ${t.title} [${STATUS[t.status]}] · ${CATEGORIES[t.category]} · prioridad ${t.priority}\n  Objetivo: ${timeLabel(t.goal_starts_at||t.starts_at)}–${timeLabel(t.goal_ends_at||t.ends_at)} (${goalDuration(t)} min). Agenda ajustada: ${timeLabel(t.starts_at)}–${timeLabel(t.ends_at)}.${t.actual_start?' Real: '+timeLabel(t.actual_start)+'–'+(t.actual_end?timeLabel(t.actual_end):'en curso')+' ('+actualDuration(t)+' min).':' Sin tiempo real registrado.'}${t.fixed_time?' Horario fijo.':''}${t.recurrence==='daily'?' · repetir cada día':''}${t.rating?' · valoración '+t.rating+'/5':''}${t.notes?'\n  Nota: '+t.notes:''}${t.review?'\n  Resultado: '+t.review:''}`);
-  return `Mi resumen de ${dayLabel(day)} (${day}), zona Europe/Madrid:\n${lines.join('\n')}\n\nPrepara mi plan para ${addDays(day)}. Primero preguntaré/añadiré mis nuevas tareas aquí. Prioriza pendientes, continuaciones y tareas pasadas a otro día sin duplicarlas con las ya programadas. Mantén mi disponibilidad laboral de 08:30 a 17:30, comida de 13:30 a 14:30 y una hora de inglés. Los bloques de empresa en horario laboral son condicionales a no tener trabajo. No rellenes todo el día: deja pausas. Devuelve un bloque JSON {"tasks":[{"start":"07:00","end":"07:30","title":"...","category":"personal","priority":"alta","notes":"...","recurrence":"none"}]} sin solapamientos. Categorías válidas: personal, work, business, english, meals, rest. Prioridades: alta, media, baja. recurrence: daily o none. La aplicación me mostrará una vista previa antes de guardar.`;
+  const lines=tasks.map(t=>`- ${t.title} [${STATUS[t.status]}] · ${CATEGORIES[t.category]} · prioridad ${t.priority}\n  Objetivo: ${timeLabel(t.goal_starts_at||t.starts_at)}–${timeLabel(t.goal_ends_at||t.ends_at)} (${goalDuration(t)} min). Agenda ajustada: ${timeLabel(t.starts_at)}–${timeLabel(t.ends_at)}.${t.actual_start?' Real: '+timeLabel(t.actual_start)+'–'+(t.actual_end?timeLabel(t.actual_end):'en curso')+' ('+actualDuration(t)+' min).':' Sin tiempo real registrado.'}${t.fixed_time?' Horario fijo.':''}${repeatLabel(t)?' · repetir: '+repeatLabel(t):''}${t.rating?' · valoración '+t.rating+'/5':''}${t.notes?'\n  Nota: '+t.notes:''}${t.review?'\n  Resultado: '+t.review:''}`);
+  return `Mi resumen de ${dayLabel(day)} (${day}), zona Europe/Madrid:\n${lines.join('\n')}\n\nPrepara mi plan para ${addDays(day)}. Primero preguntaré/añadiré mis nuevas tareas aquí. Prioriza pendientes, continuaciones y tareas pasadas a otro día sin duplicarlas con las ya programadas. Mantén mi disponibilidad laboral de 08:30 a 17:30, comida de 13:30 a 14:30 y una hora de inglés. Los bloques de empresa en horario laboral son condicionales a no tener trabajo. No rellenes todo el día: deja pausas. Devuelve un bloque JSON {"tasks":[{"start":"07:00","end":"07:30","title":"...","category":"personal","priority":"alta","notes":"...","recurrence":"none"}]} sin solapamientos. Categorías válidas: personal, work, business, english, meals, rest. Prioridades: alta, media, baja. Para repetir en días concretos usa recurrence_days: [1,2,3,4,5] (lunes=1, domingo=7); una lista vacía indica una tarea puntual. recurrence: daily, weekly o none. La aplicación me mostrará una vista previa antes de guardar.`;
 }
 // Scheduler shared by browser-independent tests and the Supabase function.
 export function dueNotifications(tasks, now) {
