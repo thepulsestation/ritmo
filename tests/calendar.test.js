@@ -1,5 +1,5 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';
-import {calendarLanes,calendarConflicts,calendarDraft,calendarBlocks,snapGesture,bindCalendarGestures}from '../calendar.js';
+import {calendarLanes,calendarConflicts,calendarDraft,calendarBlocks,snapGesture,bindCalendarGestures,calendarHTML,PIXELS_PER_MINUTE}from '../calendar.js';
 import {rhythmInsights}from '../insights.js';
 const block=(id,start,end)=>({id,start,end,status:'pending'});
 test('chained overlaps share lanes while touching endpoints keep one lane',()=>{
@@ -42,7 +42,7 @@ test('short taps keep the click target; releasing a drag uses the final pointer 
   globalThis.window={innerHeight:2400,scrollBy(){}};globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=()=>{};
   bindCalendarGestures({getDraft:()=>draft,onChange:()=>changes++,onMessage:()=>{}});
   const e=(y,type='mouse')=>({pointerId:1,clientX:100,clientY:y,button:0,isPrimary:true,pointerType:type,target:{closest:()=>source},preventDefault(){}});
-  listeners.pointerdown(e(960));listeners.pointerup(e(960));assert.equal(captured,0);assert.equal(changes,0);
-  listeners.pointerdown(e(960));listeners.pointermove(e(970));listeners.pointerup(e(984));assert.equal(captured,1);assert.equal(changes,1);assert.equal(item.start,615);assert.equal(item.minutes,30);
+  listeners.pointerdown(e(600*PIXELS_PER_MINUTE));listeners.pointerup(e(600*PIXELS_PER_MINUTE));assert.equal(captured,0);assert.equal(changes,0);
+  listeners.pointerdown(e(600*PIXELS_PER_MINUTE));listeners.pointermove(e(606*PIXELS_PER_MINUTE));listeners.pointerup(e(615*PIXELS_PER_MINUTE));assert.equal(captured,1);assert.equal(changes,1);assert.equal(item.start,615);assert.equal(item.minutes,30);
  }finally{for(const [k,v]of saved)if(v===undefined)delete globalThis[k];else globalThis[k]=v;}
 });
