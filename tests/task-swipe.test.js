@@ -5,14 +5,14 @@ import {createContext,runInContext} from 'node:vm';
 import {bindTaskSwipes} from '../task-swipe.js';
 
 // Dispatch actual handlers against a minimal DOM, including capture/bubble order.
-function fixture(){
+function fixture(touchEvents=false){
   let time=0;
   const handlers=new Map(),nodes=[];
   const root={querySelectorAll:()=>nodes,addEventListener(type,fn,options={}){const list=handlers.get(type)||[];list.push({fn,capture:options.capture});handlers.set(type,list);}};
   function row(){
     const classes=new Set(),props=new Map(),attrs=new Map(),toggleAttrs=new Map();
     const actions={inert:true,setAttribute:(k,v)=>attrs.set(k,v)};
-    const toggle={setAttribute:(k,v)=>toggleAttrs.set(k,v),closest(selector){if(selector==='.task-swipe')return node;if(selector==='button,a,input,select,textarea'||selector==='[data-action="swipe-toggle"]')return toggle;return null;}};
+    const toggle={setAttribute:(k,v)=>toggleAttrs.set(k,v),closest(selector){if(selector==='.task-swipe')return node;if(selector==='.task-row')return card;if(selector==='button,a'||selector==='button,a,input,select,textarea'||selector==='[data-action="swipe-toggle"]')return toggle;return null;}};
     const card={capture:null,setPointerCapture(id){this.capture=id;},closest(selector){if(selector==='.task-swipe')return node;if(selector==='.task-row')return card;return null;}};
     const node={isConnected:true,classList:{add:v=>classes.add(v),remove:v=>classes.delete(v),contains:v=>classes.has(v),toggle(v,on){if(on)classes.add(v);else classes.delete(v);}},style:{setProperty:(k,v)=>props.set(k,v),removeProperty:k=>props.delete(k)},querySelector:s=>s==='.task-swipe-actions'?actions:toggle,card,toggle,actions,props,attrs,toggleAttrs};
     nodes.push(node);return node;
@@ -22,7 +22,7 @@ function fixture(){
     for(const handler of [...(handlers.get(type)||[])].sort((a,b)=>Number(b.capture||false)-Number(a.capture||false))){handler.fn(event);if(event.stopped)break;}
     return event;
   }
-  bindTaskSwipes({root,now:()=>time});
+  bindTaskSwipes({root,now:()=>time,touchEvents});
   return {root,row,fire,advance:ms=>{time+=ms;},outside:{closest:()=>null}};
 }
 function swipe(f,row,start,end){f.fire('pointerdown',row.card,{clientX:start});f.fire('pointermove',row.card,{clientX:end});return f.fire('pointerup',row.card,{clientX:end});}
@@ -69,11 +69,78 @@ test('keyboard actions remain usable during the pointer click suppression window
   const f=fixture(),r=f.row();swipe(f,r,200,80);
   f.fire('click',r.toggle,{detail:0});assert.equal(r.classList.contains('is-open'),false);
 });
-test('secondary pointers and controls cannot start dragging, final release position is respected',()=>{
+test('secondary pointers are ignored and final release position is respected',()=>{
   const f=fixture(),r=f.row();f.fire('pointerdown',r.card,{isPrimary:false});f.fire('pointermove',r.card,{clientX:80});assert.equal(r.card.capture,null);
-  f.fire('pointerdown',r.toggle);f.fire('pointermove',r.toggle,{clientX:80});assert.equal(r.card.capture,null);
   f.fire('pointerdown',r.card);f.fire('pointermove',r.card,{clientX:185});f.fire('pointerup',r.card,{clientX:100});
   assert.equal(r.classList.contains('is-open'),true);
+});
+test('swiping over the options icon works while short taps still toggle once',()=>{
+  const f=fixture(),r=f.row();
+  f.fire('pointerdown',r.toggle);f.fire('pointerup',r.toggle);f.fire('click',r.toggle);
+  assert.equal(r.classList.contains('is-open'),true);
+  f.fire('pointerdown',r.toggle);f.fire('pointerup',r.toggle);f.fire('click',r.toggle);
+  assert.equal(r.classList.contains('is-open'),false);
+  f.fire('pointerdown',r.toggle);f.fire('pointermove',r.toggle,{clientX:80});f.fire('pointerup',r.card,{clientX:80});
+  assert.equal(r.classList.contains('is-open'),true);assert.equal(f.fire('click',r.toggle).stopped,true);
+});
+test('capture lost by a nested title or a different pointer cannot cancel the swipe',()=>{
+  const f=fixture(),r=f.row(),title={closest:s=>s==='.task-swipe'?r:s==='.task-row'?r.card:null};
+  f.fire('pointerdown',title,{pointerType:'touch'});f.fire('pointermove',title,{clientX:80});
+  f.fire('lostpointercapture',title);f.fire('pointercancel',title,{pointerId:2});f.fire('pointerup',title,{clientX:80});
+  assert.equal(r.classList.contains('is-open'),true);assert.equal(r.card.capture,null);
+});
+function finger(f,type,target,x,y=100,extra={}){
+  const touch={identifier:31,clientX:x,clientY:y};
+  return f.fire(type,target,{touches:type==='touchend'?[]:[touch],changedTouches:[touch],...extra});
+}
+test('Safari touch stream survives parallel pointer cancellation and implicit capture changes',()=>{
+  const f=fixture(true),r=f.row(),title={closest:s=>s==='.task-swipe'?r:s==='.task-row'?r.card:null};
+  f.fire('pointerdown',title,{pointerType:'touch'});finger(f,'touchstart',title,200);
+  f.fire('pointermove',title,{pointerType:'touch',clientX:80});
+  const move=finger(f,'touchmove',title,80);assert.equal(move.defaultPrevented,true);
+  f.fire('pointercancel',title,{pointerType:'touch'});f.fire('lostpointercapture',title);
+  const end=finger(f,'touchend',title,75);assert.equal(end.defaultPrevented,true);
+  f.fire('pointerup',title,{pointerType:'touch',clientX:75});
+  assert.equal(r.classList.contains('is-open'),true);assert.equal(r.actions.inert,false);assert.equal(r.card.capture,null);
+  f.fire('pointerdown',r.card,{pointerType:'mouse'});f.fire('pointerup',r.card,{pointerType:'mouse'});
+  assert.equal(r.classList.contains('is-open'),true);
+});
+test('finger gestures over buttons reveal Delete; taps remain native and vertical scrolling stays free',()=>{
+  const f=fixture(true),r=f.row();
+  finger(f,'touchstart',r.toggle,200);finger(f,'touchend',r.toggle,200);f.fire('click',r.toggle);
+  assert.equal(r.classList.contains('is-open'),true);
+  finger(f,'touchstart',r.toggle,200);finger(f,'touchend',r.toggle,200);f.fire('click',r.toggle);
+  assert.equal(r.classList.contains('is-open'),false);
+  finger(f,'touchstart',r.toggle,200);finger(f,'touchmove',r.toggle,80);finger(f,'touchend',r.toggle,75);
+  assert.equal(r.classList.contains('is-open'),true);
+  f.fire('keydown',r.toggle,{key:'Escape'});finger(f,'touchstart',r.card,200);
+  assert.equal(finger(f,'touchmove',r.card,205,140).defaultPrevented,false);
+  assert.equal(finger(f,'touchend',r.card,80,150).defaultPrevented,false);
+  assert.equal(r.classList.contains('is-open'),false);
+});
+test('a second finger or touch cancellation restores the starting state; right swipe closes',()=>{
+  const f=fixture(true),r=f.row();finger(f,'touchstart',r.card,200);finger(f,'touchmove',r.card,80);
+  finger(f,'touchstart',r.card,80,100,{touches:[{identifier:31},{identifier:32}]});
+  assert.equal(r.classList.contains('is-dragging'),false);assert.equal(r.classList.contains('is-open'),false);
+  finger(f,'touchstart',r.card,200);finger(f,'touchmove',r.card,80);f.fire('touchcancel',r.card);
+  assert.equal(r.props.size,0);assert.equal(r.actions.inert,true);
+  finger(f,'touchstart',r.card,200);finger(f,'touchmove',r.card,80);finger(f,'touchend',r.card,80);
+  finger(f,'touchstart',r.card,100);finger(f,'touchmove',r.card,210);finger(f,'touchend',r.card,210);
+  assert.equal(r.classList.contains('is-open'),false);
+});
+test('the Delete button accepts an intentional tap immediately after a completed swipe',()=>{
+  const f=fixture(true),r=f.row();let clicks=0;f.root.addEventListener('click',()=>clicks++);
+  finger(f,'touchstart',r.card,200);finger(f,'touchmove',r.card,80);finger(f,'touchend',r.card,80);
+  const action={closest:s=>s==='.task-swipe'?r:null};
+  f.fire('click',action);assert.equal(clicks,1);
+  f.fire('click',r.card);assert.equal(clicks,1);
+});
+test('a new deliberate tap clears drag click suppression without waiting',()=>{
+  const f=fixture(true),r=f.row();let clicks=0;f.root.addEventListener('click',()=>clicks++);
+  finger(f,'touchstart',r.card,200);finger(f,'touchmove',r.card,80);finger(f,'touchend',r.card,80);
+  assert.equal(f.fire('click',r.card).stopped,true);
+  finger(f,'touchstart',r.card,80);finger(f,'touchend',r.card,80);f.fire('click',r.card);
+  assert.equal(clicks,1);
 });
 
 const app=readFileSync(new URL('../app.js',import.meta.url),'utf8');
