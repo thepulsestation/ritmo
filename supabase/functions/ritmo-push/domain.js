@@ -25,6 +25,17 @@ export function duration(task) { return Math.round((new Date(task.ends_at)-new D
 export function goalDuration(t) { return duration({starts_at:t.goal_starts_at||t.starts_at,ends_at:t.goal_ends_at||t.ends_at}); }
 export function actualDuration(t,now=new Date()) { return t.actual_start?Math.max(0,Math.round((new Date(t.actual_end||now)-new Date(t.actual_start))/60000)):null; }
 export function taskDay(t) { return dateKey(new Date(t.goal_starts_at||t.starts_at)); }
+export function organizerItems(tasks,day,now=new Date()) {
+  const linked=new Set(tasks.map(t=>t.source_task_id).filter(Boolean));
+  const priority={alta:0,media:1,baja:2};
+  return tasks.filter(t=>taskDay(t)===day&&(['pending','deferred'].includes(t.status)||t.status==='continued'&&!linked.has(t.id))).sort((a,b)=>(a.status==='pending')-(b.status==='pending')||(priority[a.priority]??1)-(priority[b.priority]??1)||(a.goal_starts_at||a.starts_at).localeCompare(b.goal_starts_at||b.starts_at)).map(t=>({id:t.id,title:t.title,priority:t.priority||'media',include:true,minutes:Math.max(5,t.status==='continued'?Math.min(30,goalDuration(t)):t.status==='deferred'?goalDuration(t):duration(t)),fixed_time:t.status==='continued'?false:(!!t.fixed_time||/cerrar.*d[ií]a|cierre.*d[ií]a/i.test(t.title))&&new Date(t.fixed_ends_at||t.goal_ends_at||t.ends_at)>now,starts_at:t.status==='deferred'?(t.goal_starts_at||t.starts_at):t.starts_at,recover:t.status!=='pending'}));
+}
+export function organizerNoCooking(items,tasks,now=new Date()) {
+  const meal=items.find(i=>{const t=tasks.find(t=>t.id===i.id);return t?.category==='meals'&&/cocin|prepar.*com|comer/i.test(t.title);});
+  if(!meal)return null;
+  const soon=new Date(Math.ceil(new Date(now).getTime()/60000)*60000+120000);
+  return {...meal,include:true,minutes:Math.min(30,meal.minutes),starts_at:dateKey(new Date(meal.starts_at))===dateKey(now)&&new Date(meal.starts_at)<soon?soon.toISOString():meal.starts_at};
+}
 export function habits(tasks) {
   const groups=new Map();
   for(const t of tasks){if(!t.actual_start||!t.actual_end||!['completed','continued'].includes(t.status))continue;const key=t.category+':'+t.title.trim().toLocaleLowerCase('es').replace(/\s+/g,' ');if(!groups.has(key))groups.set(key,{title:t.title,values:[],goals:[]});const g=groups.get(key);g.values.push(actualDuration(t));g.goals.push(goalDuration(t));}
