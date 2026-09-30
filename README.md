@@ -8,11 +8,12 @@ Agenda personal instalable, publicada en GitHub Pages y respaldada por Supabase.
 2. Empezar un bloque y cerrarlo como completado, continuación, reprogramado o descartado. Añadir notas y valoración opcional. Al empezar tarde, el resto se reajusta. Al terminar antes, elegir entre adelantar las tareas siguientes o conservar el tiempo libre. Siempre se muestra una vista previa.
 3. En **Preparar mañana**, copiar el resumen para el chat. Pegar el plan recibido, revisar y guardar.
 4. Las tareas diarias se copian con **Copiar rutina**, usando sus horas objetivo, para que el retraso de hoy no se copie a mañana. Los horarios que ya están ocupados se conservan.
-5. Instalar desde el móvil y activar notificaciones. El botón de prueba confirma la recepción en ese dispositivo.
+5. Abrir un bloque y pulsar **Eliminar tarea**. Sale de la agenda y detiene sus avisos. **Deshacer eliminación** lo recupera al momento, y **Papelera** permite recuperarlo más adelante. Solo se elimina ese bloque; otros días y continuaciones se conservan. Si al recuperarlo su horario pasó o está ocupado, queda pendiente de recolocar. Un bloque que estaba en curso se recupera como continuación, conservando su tiempo trabajado.
+6. Instalar desde el móvil y activar notificaciones. El botón de prueba confirma la recepción en ese dispositivo.
 
 ## Desarrollo
 
-Aplicación estática sin compilación: `node scripts/serve.mjs`. Pruebas: `npm test`. Preparar la función: `node scripts/prepare.mjs`. Para una instalación nueva usar `supabase/schema.sql`; para actualizar una instalación anterior aplicar, en orden, `supabase/migrations/20260930_adaptive.sql` y `supabase/migrations/20260930_reorganize.sql`.
+Aplicación estática sin compilación: `node scripts/serve.mjs`. Pruebas: `npm test`. Preparar la función: `node scripts/prepare.mjs`. Para una instalación nueva usar `supabase/schema.sql`; para actualizar una instalación anterior aplicar, en orden, `supabase/migrations/20260930_adaptive.sql` `supabase/migrations/20260930_reorganize.sql` y `supabase/migrations/20260930_delete.sql`.
 
 ## Agenda adaptable
 

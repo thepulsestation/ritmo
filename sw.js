@@ -1,4 +1,4 @@
-const CACHE='ritmo-shell-v5';
+const CACHE='ritmo-shell-v6';
 const ASSETS=['./','./index.html','./styles.css','./app.js','./domain.js','./access.js','./config.js','./supabase-client.js','./icon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
