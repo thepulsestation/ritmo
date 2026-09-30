@@ -30,7 +30,7 @@ test('stable routine groups renamed repeats; recommendation resists an outlier a
  assert.equal(h.count,6);assert.equal(h.typical,23);assert.equal(h.suggestion,25);assert.equal(h.improvement,15);assert.equal(h.title,'Salir sin móvil');
 });
 test('partial continuations and untracked completions cannot create a full-task duration recommendation',()=>{
- const h=rhythmInsights([occurrence(1,30),occurrence(2,4,{status:'continued'}),occurrence(3,20,{actual_start:null})])[0];assert.equal(h.count,1);assert.equal(h.suggestion,null);assert.equal(h.improvement,null);
+ const h=rhythmInsights([occurrence(1,30),occurrence(2,4,{status:'continued'}),occurrence(3,20,{actual_start:null}),occurrence(4,10,{source_task_id:'t2',recurrence:'none'})])[0];assert.equal(h.count,1);assert.equal(h.suggestion,null);assert.equal(h.improvement,null);
 });
 test('short taps keep the click target; releasing a drag uses the final pointer position before the next animation frame',()=>{
  const names=['document','window','requestAnimationFrame','cancelAnimationFrame'],saved=names.map(k=>[k,globalThis[k]]),listeners={};let captured=0,changes=0;
