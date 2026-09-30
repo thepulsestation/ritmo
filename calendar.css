@@ -8,3 +8,6 @@
 @media(max-width:680px){.calendar-toolbar{align-items:stretch;flex-direction:column;padding:15px}.calendar-toolbar .btn{align-self:flex-start}.calendar-tray{padding:13px 15px}.calendar-block-body strong{font-size:.74rem}.calendar-block-body small{font-size:.65rem}.calendar-scroll{height:62dvh}.calendar-tray-items{max-height:240px;overflow-y:auto;overflow-x:hidden}.calendar-recovery button{font-size:.8rem}}
 
 .calendar-zoom{margin:10px 14px}.calendar-block-body strong{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.calendar-block.short-block .calendar-block-body strong{-webkit-line-clamp:2;font-size:.75rem;line-height:1.2}.calendar-block.short-block .calendar-block-body,.is-editing .calendar-block.short-block .calendar-block-body{padding:6px 7px;gap:2px}.calendar-block.short-block .calendar-block-body small{font-size:.7rem}
+
+/* The reserve wraps at the same width as the live message, preventing drag layout shifts. */
+.calendar-status{display:grid;padding:12px 18px}.calendar-status[hidden]{display:none}.calendar-status>span{grid-area:1/1}.calendar-status-reserve{visibility:hidden;pointer-events:none}.calendar-status-message{align-self:center}

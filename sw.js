@@ -1,5 +1,5 @@
-const CACHE='ritmo-shell-v10';
-const ASSETS=['./','./index.html','./styles.css?v=10','./calendar.css?v=10','./app.js?v=10','./calendar.js?v=10','./insights.js?v=10','./domain.js?v=10','./access.js','./config.js','./supabase-client.js','./icon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
+const CACHE='ritmo-shell-v11';
+const ASSETS=['./','./index.html','./styles.css?v=11','./calendar.css?v=11','./app.js?v=11','./calendar.js?v=11','./insights.js?v=11','./planning.js?v=11','./domain.js?v=11','./access.js','./config.js','./supabase-client.js','./icon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{

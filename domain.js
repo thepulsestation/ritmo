@@ -30,6 +30,11 @@ export function madridTime(day, time) {
 export function timeLabel(iso) { return new Intl.DateTimeFormat('es-ES',{timeZone:'Europe/Madrid',hour:'2-digit',minute:'2-digit'}).format(new Date(iso)); }
 export function dayLabel(key) { return new Intl.DateTimeFormat('es-ES',{timeZone:'Europe/Madrid',weekday:'long',day:'numeric',month:'long'}).format(new Date(key+'T12:00:00Z')); }
 export function duration(task) { return Math.round((new Date(task.ends_at)-new Date(task.starts_at))/60000); }
+export function formatDuration(minutes) {
+  if(minutes===null||!Number.isFinite(minutes))return '—';
+  const n=Math.max(0,Math.round(minutes)),h=Math.floor(n/60),m=n%60;
+  return h?`${h} h${m?' '+m+' min':''}`:`${m} min`;
+}
 export function goalDuration(t) { return duration({starts_at:t.goal_starts_at||t.starts_at,ends_at:t.goal_ends_at||t.ends_at}); }
 export function actualDuration(t,now=new Date()) { return t.actual_start?Math.max(0,Math.round((new Date(t.actual_end||now)-new Date(t.actual_start))/60000)):null; }
 export function taskDay(t) { return dateKey(new Date(t.goal_starts_at||t.starts_at)); }
@@ -74,15 +79,21 @@ export function parsePlan(raw, day) {
     if(t.end<=t.start)throw new Error(`La tarea ${i+1} debe terminar después de empezar, dentro del mismo día.`);
     const days=repeatDays(t);
     const item={title:t.title.trim(),starts_at:madridTime(day,t.start),ends_at:madridTime(day,t.end),category:t.category||'personal',priority,notes:String(t.notes||'').slice(0,4000),recurrence:recurrenceFor(days),recurrence_days:days,fixed_time:typeof t.fixed_time==='boolean'?t.fixed_time:['work','meals'].includes(t.category),status:'pending'};
+    for(const key of ['routine_id','repeat_series_id','existing_task_id','source_task_id'])if(t[key]!=null){
+      if(typeof t[key]!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t[key]))throw new Error(`La referencia ${key} de la tarea ${i+1} no es válida. Copia la referencia original sin cambiarla.`);
+      item[key]=t[key].toLowerCase();
+    }
     if(duration(item)<5||duration(item)>720)throw new Error(`La tarea ${i+1} debe durar entre 5 minutos y 12 horas.`);
     return item;
   }).sort((a,b)=>a.starts_at.localeCompare(b.starts_at));
   result.forEach((t,i)=>{if(i&&t.starts_at<result[i-1].ends_at)throw new Error(`«${t.title}» se solapa con «${result[i-1].title}».`);});
+  const existing=result.map(t=>t.existing_task_id).filter(Boolean),series=result.map(t=>t.repeat_series_id).filter(Boolean);
+  if(new Set(existing).size!==existing.length||new Set(series).size!==series.length)throw new Error('El plan repite una tarea de la agenda o de la rutina. Cada repetición debe aparecer una sola vez.');
   return result;
 }
 export function summaryText(tasks, day) {
-  const lines=tasks.map(t=>`- ${t.title} [${STATUS[t.status]}] · ${CATEGORIES[t.category]} · prioridad ${t.priority}\n  Objetivo: ${timeLabel(t.goal_starts_at||t.starts_at)}–${timeLabel(t.goal_ends_at||t.ends_at)} (${goalDuration(t)} min). Agenda ajustada: ${timeLabel(t.starts_at)}–${timeLabel(t.ends_at)}.${t.actual_start?' Real: '+timeLabel(t.actual_start)+'–'+(t.actual_end?timeLabel(t.actual_end):'en curso')+' ('+actualDuration(t)+' min).':' Sin tiempo real registrado.'}${t.fixed_time?' Horario fijo.':''}${repeatLabel(t)?' · repetir: '+repeatLabel(t):''}${t.rating?' · valoración '+t.rating+'/5':''}${t.notes?'\n  Nota: '+t.notes:''}${t.review?'\n  Resultado: '+t.review:''}`);
-  return `Mi resumen de ${dayLabel(day)} (${day}), zona Europe/Madrid:\n${lines.join('\n')}\n\nPrepara mi plan para ${addDays(day)}. Primero preguntaré/añadiré mis nuevas tareas aquí. Prioriza pendientes, continuaciones y tareas pasadas a otro día sin duplicarlas con las ya programadas. Mantén mi disponibilidad laboral de 08:30 a 17:30, comida de 13:30 a 14:30 y una hora de inglés. Los bloques de empresa en horario laboral son condicionales a no tener trabajo. No rellenes todo el día: deja pausas. Devuelve un bloque JSON {"tasks":[{"start":"07:00","end":"07:30","title":"...","category":"personal","priority":"alta","notes":"...","recurrence":"none"}]} sin solapamientos. Categorías válidas: personal, work, business, english, meals, rest. Prioridades: alta, media, baja. Para repetir en días concretos usa recurrence_days: [1,2,3,4,5] (lunes=1, domingo=7); una lista vacía indica una tarea puntual. recurrence: daily, weekly o none. La aplicación me mostrará una vista previa antes de guardar.`;
+  const lines=tasks.map(t=>`- ${t.title} [${STATUS[t.status]}] · ${CATEGORIES[t.category]} · prioridad ${t.priority}\n  Objetivo: ${timeLabel(t.goal_starts_at||t.starts_at)}–${timeLabel(t.goal_ends_at||t.ends_at)} (${formatDuration(goalDuration(t))}). Agenda ajustada: ${timeLabel(t.starts_at)}–${timeLabel(t.ends_at)}.${t.actual_start?' Real: '+timeLabel(t.actual_start)+'–'+(t.actual_end?timeLabel(t.actual_end):'en curso')+' ('+formatDuration(actualDuration(t))+').':' Sin tiempo real registrado.'}${t.fixed_time?' Horario fijo.':''}${repeatLabel(t)?' · repetir: '+repeatLabel(t):''}${t.rating?' · valoración '+t.rating+'/5':''}${t.notes?'\n  Nota: '+t.notes:''}${t.review?'\n  Resultado: '+t.review:''}`);
+  return `Mi resumen de ${dayLabel(day)} (${day}), zona Europe/Madrid:\n${lines.length?lines.join('\n'):'No hay tareas registradas este día.'}`;
 }
 // Scheduler shared by browser-independent tests and the Supabase function.
 export function dueNotifications(tasks, now) {
