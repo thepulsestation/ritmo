@@ -1,5 +1,5 @@
-const CACHE='ritmo-shell-v7';
-const ASSETS=['./','./index.html','./styles.css?v=6','./app.js?v=6','./domain.js','./access.js','./config.js','./supabase-client.js','./icon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
+const CACHE='ritmo-shell-v8';
+const ASSETS=['./','./index.html','./styles.css?v=8','./calendar.css?v=8','./app.js?v=8','./calendar.js?v=8','./insights.js?v=8','./domain.js','./access.js','./config.js','./supabase-client.js','./icon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{
