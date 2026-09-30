@@ -64,7 +64,7 @@ begin
  select * into t from public.ritmo_tasks where id=task_id and user_id=uid and status<>'deleted';if not found then raise exception 'Tarea no encontrada.';end if;
  if new_start<now()then raise exception 'Elige una hora futura para la repetición.';end if;
  perform public.ritmo_check_slot(uid,new_start,new_end);
- insert into public.ritmo_tasks(user_id,title,starts_at,ends_at,category,priority,notes,recurrence,source_task_id,routine_id,fixed_time,goal_fixed_time)values(uid,t.title,new_start,new_end,t.category,t.priority,t.notes,case when repeat_daily then 'daily'else 'none'end,t.id,t.routine_id,t.goal_fixed_time,t.goal_fixed_time)returning id into result;
+ insert into public.ritmo_tasks(user_id,title,starts_at,ends_at,category,priority,notes,recurrence,routine_id,fixed_time,goal_fixed_time)values(uid,t.title,new_start,new_end,t.category,t.priority,t.notes,case when repeat_daily then 'daily'else 'none'end,t.routine_id,t.goal_fixed_time,t.goal_fixed_time)returning id into result;
  insert into public.ritmo_events(user_id,task_id,event,details)values(uid,t.id,'repeated',jsonb_build_object('new_task_id',result,'starts_at',new_start,'ends_at',new_end));return result;
 end;$$;
 revoke all on function public.ritmo_calendar(jsonb),public.ritmo_repeat_task(uuid,timestamptz,timestamptz,boolean)from public,anon;
