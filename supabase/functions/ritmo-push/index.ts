@@ -19,7 +19,7 @@ async function send(subscription:any,payload:any){
   if(!validSubscription(subscription))throw new Error('Unsupported push endpoint');
   await webpush.sendNotification(subscription,JSON.stringify(payload),{TTL:90,urgency:'high',timeout:10000,vapidDetails:{subject:'https://thepulsestation.github.io/ritmo/',publicKey:vapidPublic,privateKey:vapidPrivate}});
 }
-function payload(t:any,kind:string,slot:number){const messages:any={before:{title:'En 2 minutos: '+t.title,body:'Ve cerrando lo anterior. Tu próximo bloque está a punto de empezar.'},start:{title:'Es hora de '+t.title,body:'Abre Ritmo para cerrar el bloque anterior y empezar este.'},end:{title:'Cierra tu bloque: '+t.title,body:'¿Lo has terminado, continúas después o lo pasas a otro día?'},repeat:{title:t.status==='active'?'¿Cómo va «'+t.title+'»?':'Tu siguiente paso: '+t.title,body:t.status==='active'?'El horario de este bloque terminó. Entra en Ritmo y elige cómo continuar.':'Este bloque sigue pendiente. Entra en Ritmo para empezar o reprogramarlo.'}};return {...messages[kind],tag:`ritmo-${t.id}-${kind}-${slot}`};}
+function payload(t:any,kind:string,slot:number){const messages:any={before:{title:'En 2 minutos: '+t.title,body:'Ve cerrando lo anterior. Tu próximo bloque está a punto de empezar.'},'end-soon':{title:'En 2 minutos, cambia de tarea',body:'Ve cerrando «'+t.title+'». Valora el bloque y elige tu siguiente paso.'},start:{title:'Es hora de '+t.title,body:'Abre Ritmo para cerrar el bloque anterior y empezar este.'},end:{title:'Cierra tu bloque: '+t.title,body:'¿Lo has terminado, continúas después o lo pasas a otro día?'},repeat:{title:t.status==='active'?'Te estás pasando: '+t.title:'Tu siguiente paso: '+t.title,body:t.status==='active'?'Para y cambia de tarea. Abre Ritmo para terminar o continuar después; tu agenda se reajusta.':'Este bloque sigue pendiente. Entra en Ritmo para empezar o reprogramarlo.'}};return {...messages[kind],tag:`ritmo-${t.id}-${kind}-${slot}`};}
 Deno.serve(async req=>{
   if(req.method==='OPTIONS')return new Response('',{headers});
   if(req.method!=='POST')return response(405,{error:'Method not allowed'});
@@ -37,6 +37,7 @@ Deno.serve(async req=>{
       if(claim)return response(429,{error:'Try again in one minute'});
       await send(sub.subscription,{title:'Ritmo está contigo',body:'Los avisos llegan a este dispositivo. Ya puedes cerrar la app.',tag:'ritmo-test'});return response(200,{ok:true});
     }
+    const {error:adjustError}=await admin.rpc('ritmo_sync_overdue');if(adjustError)throw adjustError;
     const now=new Date();
     const {error:healthError}=await admin.from('ritmo_health').upsert({id:1,checked_at:now.toISOString()});if(healthError)throw healthError;
     const {data:owners,error:oe}=await admin.from('ritmo_owners').select('*').eq('notifications_enabled',true);if(oe)throw oe;
@@ -52,7 +53,7 @@ Deno.serve(async req=>{
           if(claimError){if(claimError.code==='23505')continue;throw claimError;}
           // Recheck status immediately before dispatch, to respect a concurrent decision.
           const {data:latest}=await admin.from('ritmo_tasks').select('status,starts_at,ends_at').eq('id',due.task.id).maybeSingle();
-          if(!latest||!['pending','active'].includes(latest.status)||latest.starts_at!==due.task.starts_at||latest.ends_at!==due.task.ends_at)continue;
+          if(!latest||latest.status!==due.task.status||latest.starts_at!==due.task.starts_at||latest.ends_at!==due.task.ends_at)continue;
           try{await send(sub.subscription,payload(due.task,due.kind,due.slot));sent++;await admin.from('ritmo_notification_deliveries').update({delivered_at:new Date().toISOString()}).eq('task_id',due.task.id).eq('subscription_id',sub.id).eq('kind',due.kind).eq('slot',due.slot);}
           catch(error:any){failed++;if([404,410].includes(error.statusCode)){await admin.from('ritmo_push_subscriptions').delete().eq('id',sub.id);}else{await admin.from('ritmo_notification_deliveries').update({error:String(error.message).slice(0,300)}).eq('task_id',due.task.id).eq('subscription_id',sub.id).eq('kind',due.kind).eq('slot',due.slot);}}
         }
