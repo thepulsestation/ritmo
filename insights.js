@@ -1,4 +1,4 @@
-import {actualDuration,goalDuration,formatDuration} from './domain.js?v=11';
+import {actualDuration,goalDuration,formatDuration} from './domain.js?v=14';
 
 const median=values=>{const v=[...values].sort((a,b)=>a-b),n=v.length;return n?Math.round(n%2?v[(n-1)/2]:(v[n/2-1]+v[n/2])/2):0;};
 export function rhythmInsights(tasks){

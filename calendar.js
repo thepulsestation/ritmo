@@ -1,4 +1,4 @@
-import {escapeHtml as esc,CATEGORIES,STATUS,dateKey,taskDay,timeLabel,goalDuration,duration,formatDuration,organizerItems} from './domain.js?v=11';
+import {escapeHtml as esc,CATEGORIES,STATUS,dateKey,taskDay,timeLabel,goalDuration,duration,formatDuration,organizerItems} from './domain.js?v=14';
 export const PIXELS_PER_MINUTE=6;
 export const clockMinutes=iso=>{const [h,m]=timeLabel(iso).split(':').map(Number);return h*60+m;};
 export const minuteClock=n=>`${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`;
@@ -28,18 +28,35 @@ export function calendarConflicts(blocks){
   for(let i=0;i<open.length;i++)for(let j=i+1;j<open.length;j++)if(open[i].start<open[j].end&&open[j].start<open[i].end)pairs.push([open[i],open[j]]);
   return pairs;
 }
-export function snapGesture({mode,start,minutes,delta,target}){
+export function snapGesture({mode,start,minutes,delta,target,neighbors=[]}){
   const change=Math.round(delta/5)*5;
-  if(mode==='resize-start'){const s=Math.max(0,start+minutes-720,Math.min(start+minutes-5,start+change));return {start:s,minutes:start+minutes-s};}
-  if(mode==='resize-end')return {start,minutes:Math.max(5,Math.min(720,1439-start,minutes+change))};
-  return {start:Math.max(0,Math.min(1439-minutes,Math.round((target??start+change)/5)*5)),minutes};
+  // Compare against the raw gesture, before rounding: a neighbor at 07:21
+  // takes priority over the five-minute grid only when its edge is nearby.
+  const magnetic=(raw,candidates,min,max,fallback)=>{
+    const edges=candidates.filter(n=>Number.isInteger(n)&&n>=min&&n<=max&&Math.abs(n-raw)<=3);
+    edges.sort((a,b)=>Math.abs(a-raw)-Math.abs(b-raw)||Math.abs(a-fallback)-Math.abs(b-fallback)||a-b);
+    return edges[0]??fallback;
+  };
+  if(mode==='resize-start'){
+    const end=start+minutes,min=Math.max(0,end-720),max=end-5;
+    const s=magnetic(start+delta,neighbors.map(b=>b.end),min,max,Math.max(min,Math.min(max,start+change)));
+    return {start:s,minutes:end-s};
+  }
+  if(mode==='resize-end'){
+    const max=Math.min(start+720,1439),fallback=start+Math.max(5,Math.min(720,1439-start,minutes+change));
+    const end=magnetic(start+minutes+delta,neighbors.map(b=>b.start),start+5,max,fallback);
+    return {start,minutes:end-start};
+  }
+  const raw=target??start+delta,fallback=Math.max(0,Math.min(1439-minutes,Math.round((target??start+change)/5)*5));
+  return {start:magnetic(raw,neighbors.flatMap(b=>[b.end,b.start-minutes]),0,1439-minutes,fallback),minutes};
 }
 export function calendarHTML(tasks,day,draft=null,scale=PIXELS_PER_MINUTE){
   const blocks=calendarLanes(calendarBlocks(tasks,day,draft)),recovery=draft?draft.items.filter(t=>!t.placed):organizerItems(tasks,day).filter(t=>t.recover),conflicts=draft?calendarConflicts(blocks):[],editing=!!draft;
   return `<section class="day-calendar ${editing?'is-editing':''}" aria-label="Calendario del día"><div class="calendar-toolbar"><div><h3>Tu día de un vistazo</h3><p>${editing?'Mantén pulsado y arrastra. Usa los extremos para cambiar la duración.':'Toca un bloque para abrirlo. Los espacios vacíos son tiempo libre.'}</p></div><button class="btn ${editing?'':'primary'}" data-action="${editing?'calendar-cancel':'calendar-edit'}">${editing?'Cancelar cambios':'Mover y ajustar'}</button></div>${recovery.length?`<div class="calendar-tray"><strong>Sin hueco · ${recovery.length}</strong><p>${editing?'Arrastra desde el asa hacia la hora que quieras, o toca para elegirla.':'Puedes recolocarlas desde Mover y ajustar.'}</p><div class="calendar-tray-items">${recovery.map(t=>`<div class="calendar-recovery" data-cal-id="${t.id}"><button data-action="${editing?'calendar-edit-block':'detail'}" data-id="${t.id}"><span>${esc(t.title)}</span><small>${formatDuration(t.minutes)}</small></button>${editing?`<span class="recovery-grip" data-cal-drag="place" data-id="${t.id}" role="button" tabindex="0" aria-label="Arrastrar ${esc(t.title)} al calendario">⠿</span>`:''}</div>`).join('')}</div></div>`:''}<div id="calendar-status" class="calendar-status ${conflicts.length?'has-conflicts':''}" role="status" ${editing||conflicts.length?'':'hidden'}><span class="calendar-status-reserve" aria-hidden="true">Propuesta sin solapamientos. Los horarios fijos solo cambian si tú los mueves.</span><span class="calendar-status-reserve" aria-hidden="true">Hay solapamientos. Mueve o acorta los bloques antes de guardar.</span><span class="calendar-status-message">${conflicts.length?`${conflicts.length} solapamiento${conflicts.length===1?'':'s'}. Mueve o acorta los bloques antes de guardar.`:editing?'Propuesta sin solapamientos. Los horarios fijos solo cambian si tú los mueves.':''}</span></div><div class="calendar-zoom segmented" role="group" aria-label="Tamaño de las franjas"><button data-action="calendar-zoom" data-mode="large" class="${scale===PIXELS_PER_MINUTE?'active':''}" aria-pressed="${scale===PIXELS_PER_MINUTE}">Franjas amplias</button><button data-action="calendar-zoom" data-mode="compact" class="${scale!==PIXELS_PER_MINUTE?'active':''}" aria-pressed="${scale!==PIXELS_PER_MINUTE}">Vista general</button></div><div class="calendar-scroll" id="calendar-scroll" aria-label="Horas del día"><div class="calendar-grid" id="calendar-grid" style="--calendar-scale:${scale};height:${1440*scale}px">${Array.from({length:24},(_,h)=>`<div class="calendar-hour" style="top:${h*60*scale}px"><span>${minuteClock(h*60)}</span></div>`).join('')}<div class="calendar-blocks">${blocks.map(b=>`<div class="calendar-block ${(b.end-b.start)<=10?'short-block':''} category-${b.category} ${b.editable?'editable':''} ${b.status==='completed'?'is-completed':''} ${conflicts.some(p=>p.some(x=>x.id===b.id))?'overlaps':''}" data-cal-id="${b.id}" ${editing&&b.editable?`data-cal-drag="move" data-id="${b.id}"`:''} style="top:${b.start*scale}px;height:${Math.max(24,(b.end-b.start)*scale-2)}px;left:calc(${b.lane/b.lanes*100}% + 3px);width:calc(${100/b.lanes}% - 6px)"><button class="calendar-block-body" data-action="${editing&&b.editable?'calendar-edit-block':'detail'}" data-id="${b.id}" aria-label="${esc(b.title)}, ${minuteClock(b.start)} a ${minuteClock(Math.min(1439,b.end))}, ${formatDuration(b.end-b.start)}, ${STATUS[b.status]}"><strong>${esc(b.title)}</strong><small>${minuteClock(b.start)}–${minuteClock(Math.min(1439,b.end))} (${formatDuration(b.end-b.start)})${b.real?' · Real':b.fixed_time?' · Fijo':''}</small></button>${editing&&b.editable?`<span class="calendar-handle start" data-cal-drag="resize-start" data-id="${b.id}" aria-label="Ajustar inicio"></span><span class="calendar-handle end" data-cal-drag="resize-end" data-id="${b.id}" aria-label="Ajustar fin"></span>`:''}</div>`).join('')}</div><div id="calendar-now" class="calendar-now" ${day!==dateKey()?'hidden':''} style="top:${clockMinutes(new Date())*scale}px"><span>${timeLabel(new Date())}</span></div><div class="calendar-ghost" id="calendar-ghost" hidden></div></div></div>${editing?'<div class="calendar-save"><button class="btn primary" data-action="calendar-preview">Revisar y guardar mi día</button><p class="hint">Los cambios se guardan juntos. Puedes dejar tareas sin hueco y conservar tiempo libre.</p></div>':''}</section>`;
 }
-export function bindCalendarGestures({getDraft,onChange,onMessage,getScale=()=>PIXELS_PER_MINUTE}){
+export function bindCalendarGestures({getDraft,onChange,onMessage,getScale=()=>PIXELS_PER_MINUTE,getBlocks=()=>[]}){
   let gesture=null,suppressUntil=0,frame=0;
+  const nextPosition=(g,target)=>snapGesture({mode:g.mode,start:g.start,minutes:g.minutes,delta:target-g.anchor,target:g.mode==='place'?target:undefined,neighbors:g.neighbors});
   const cancel=()=>{if(!gesture)return;clearTimeout(gesture.timer);cancelAnimationFrame(frame);document.getElementById('calendar-ghost')?.setAttribute('hidden','');gesture.source.classList.remove('dragging');gesture=null;};
   const update=()=>{
     if(!gesture?.active)return;
@@ -48,7 +65,7 @@ export function bindCalendarGestures({getDraft,onChange,onMessage,getScale=()=>P
     if(inside&&gesture.y<rect.top+48)scroll.scrollTop-=10;else if(inside&&gesture.y>rect.bottom-48)scroll.scrollTop+=10;
     if(!inside&&gesture.mode==='place'){if(gesture.y>window.innerHeight-70)window.scrollBy(0,10);else if(gesture.y<60)window.scrollBy(0,-10);}
     const target=(gesture.y-grid.getBoundingClientRect().top)/getScale();
-    gesture.next=snapGesture({mode:gesture.mode,start:gesture.start,minutes:gesture.minutes,delta:target-gesture.anchor,target:gesture.mode==='place'?target:undefined});
+    gesture.next=nextPosition(gesture,target);
     gesture.inside=inside||gesture.mode!=='place';
     const ghost=document.getElementById('calendar-ghost');ghost.hidden=false;ghost.style.top=gesture.next.start*getScale()+'px';ghost.style.height=Math.max(28,gesture.next.minutes*getScale())+'px';ghost.textContent=`${minuteClock(gesture.next.start)}–${minuteClock(gesture.next.start+gesture.next.minutes)} · ${formatDuration(gesture.next.minutes)}`;
     frame=requestAnimationFrame(update);
@@ -56,7 +73,7 @@ export function bindCalendarGestures({getDraft,onChange,onMessage,getScale=()=>P
   document.addEventListener('pointerdown',e=>{
     const source=e.target.closest('[data-cal-drag]'),draft=getDraft();if(!source||!draft||e.button!==0||!e.isPrimary)return;
     const item=draft.items.find(i=>i.id===source.dataset.id);if(!item)return;
-    const grid=document.getElementById('calendar-grid');gesture={source,id:item.id,pointer:e.pointerId,x:e.clientX,y:e.clientY,originX:e.clientX,originY:e.clientY,start:item.start,minutes:item.minutes,mode:source.dataset.calDrag,anchor:(e.clientY-grid.getBoundingClientRect().top)/getScale(),active:false};
+    const grid=document.getElementById('calendar-grid');gesture={source,id:item.id,neighbors:getBlocks().filter(b=>b.id!==item.id),pointer:e.pointerId,x:e.clientX,y:e.clientY,originX:e.clientX,originY:e.clientY,start:item.start,minutes:item.minutes,mode:source.dataset.calDrag,anchor:(e.clientY-grid.getBoundingClientRect().top)/getScale(),active:false};
     const activate=()=>{if(!gesture||gesture.active)return;gesture.active=true;source.setPointerCapture(gesture.pointer);source.classList.add('dragging');onMessage('Suelta para colocar el bloque.');update();};gesture.activate=activate;
     if(gesture.mode.startsWith('resize'))activate();else gesture.timer=setTimeout(activate,280);
   });
@@ -66,7 +83,7 @@ export function bindCalendarGestures({getDraft,onChange,onMessage,getScale=()=>P
     if(gesture.active){
       const grid=document.getElementById('calendar-grid'),scroll=document.getElementById('calendar-scroll');
       if(grid&&scroll){const rect=scroll.getBoundingClientRect(),target=(e.clientY-grid.getBoundingClientRect().top)/getScale();
-        gesture.next=snapGesture({mode:gesture.mode,start:gesture.start,minutes:gesture.minutes,delta:target-gesture.anchor,target:gesture.mode==='place'?target:undefined});
+        gesture.next=nextPosition(gesture,target);
         gesture.inside=gesture.mode!=='place'||e.clientY>=rect.top&&e.clientY<=rect.bottom&&e.clientX>=rect.left&&e.clientX<=rect.right;
       }
     }

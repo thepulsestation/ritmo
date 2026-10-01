@@ -49,6 +49,10 @@ export function organizerNoCooking(items,tasks,now=new Date()) {
   const soon=new Date(Math.ceil(new Date(now).getTime()/60000)*60000+120000);
   return {...meal,include:true,minutes:Math.min(30,meal.minutes),starts_at:dateKey(new Date(meal.starts_at))===dateKey(now)&&new Date(meal.starts_at)<soon?soon.toISOString():meal.starts_at};
 }
+export function unplacedTasks(tasks,day){
+  const linked=new Set(tasks.filter(t=>t.status!=='deleted').map(t=>t.source_task_id).filter(Boolean));
+  return tasks.filter(t=>(!day||taskDay(t)===day)&&['deferred','continued'].includes(t.status)&&!linked.has(t.id));
+}
 export function habits(tasks) {
   const groups=new Map();
   for(const t of tasks){if(!t.actual_start||!t.actual_end||!['completed','continued'].includes(t.status))continue;const key=t.category+':'+t.title.trim().toLocaleLowerCase('es').replace(/\s+/g,' ');if(!groups.has(key))groups.set(key,{title:t.title,values:[],goals:[]});const g=groups.get(key);g.values.push(actualDuration(t));g.goals.push(goalDuration(t));}
