@@ -1,5 +1,5 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';
-import {formatDuration,parsePlan,summaryText} from '../domain.js';
+import {formatDuration,parsePlan,summaryText,unplacedTasks} from '../domain.js';
 import {planInstructions,routineCandidates,agendaContext,chatSummary,allForChat} from '../planning.js';
 const habit='00000000-0000-0000-0000-000000000001',series='00000000-0000-0000-0000-000000000002',id='00000000-0000-0000-0000-000000000003';
 const task=(day,extra={})=>({id,routine_id:habit,repeat_series_id:series,title:'Salir sin redes',category:'personal',priority:'alta',status:'pending',starts_at:day+'T09:00:00+02:00',ends_at:day+'T09:20:00+02:00',goal_starts_at:day+'T07:00:00+02:00',goal_ends_at:day+'T07:10:00+02:00',recurrence:'weekly',recurrence_days:[1,2,3,4,5],notes:'Zapatos preparados',...extra});
@@ -43,4 +43,20 @@ test('pending work carries its source reference while parents with a scheduled c
  const text=chatSummary([parent],'2026-09-30');assert.match(text,/"source_task_id"/);assert.match(text,/"partial_continuation": true/);
  assert.match(chatSummary([parent,child],'2026-09-30'),/No hay pendientes sin continuación programada/);
  const row={start:'07:00',end:'07:15',title:'Continuar',source_task_id:id,routine_id:habit};assert.equal(parsePlan(JSON.stringify([row]),'2026-10-01')[0].source_task_id,id);
+});
+test('unplaced filter keeps deferred and unscheduled partial tasks, excluding other days and linked parents',()=>{
+ const rows=[task('2026-09-30',{id:'deferred',status:'deferred'}),task('2026-09-30',{id:'partial',status:'continued'}),task('2026-09-30',{id:'linked',status:'continued'}),task('2026-10-01',{id:'child',source_task_id:'linked'}),task('2026-09-30',{id:'done',status:'completed'}),task('2026-09-30',{id:'deleted',status:'deleted'}),task('2026-10-01',{id:'future',status:'deferred'}),task('2026-09-30',{id:'pending'})];
+ assert.deepEqual(unplacedTasks(rows,'2026-09-30').map(t=>t.id),['deferred','partial']);
+ assert.deepEqual(unplacedTasks(rows).map(t=>t.id),['deferred','partial','future']);
+});
+test('summary highlights unplaced work with source references once, without recovering rescheduled or deleted tasks',()=>{
+ const deferred=task('2026-09-30',{status:'deferred',title:'Automatización sin hueco'}),partial=task('2026-09-29',{id:'partial',status:'continued',title:'Prueba a medias'});
+ const rows=[deferred,partial,task('2026-09-30',{id:'removed',status:'deleted',title:'Eliminada no recuperar'}),task('2026-10-01',{id:'future',status:'deferred',title:'Futuro sin hueco'})];
+ const text=chatSummary(rows,'2026-09-30'),section=text.split('Tareas que quedaron sin hueco')[1].split('Otros pendientes')[0];
+ const data=JSON.parse(section.slice(section.indexOf('[')));
+ assert.equal(data.length,2);assert.equal(data[0].source_task_id,id);assert.equal(data[0].scheduling_state,'sin_hueco');assert.equal(data[0].routine_id,habit);assert.equal(data[0].start,'07:00');assert.equal(data[1].source_day,'2026-09-29');assert.equal(data[1].partial_continuation,true);
+ assert.equal((text.match(new RegExp('"source_task_id": "'+id+'"','g'))||[]).length,1);assert.doesNotMatch(text,/Eliminada no recuperar|Futuro sin hueco/);
+ const rescheduled=task('2026-10-01',{id:'child',source_task_id:id});
+ assert.doesNotMatch(chatSummary([{...deferred,status:'postponed'},rescheduled],'2026-09-30'),/"scheduling_state": "sin_hueco"/);
+ assert.match(planInstructions('2026-10-01'),/recuperar, dejar pendientes o descartar/);
 });

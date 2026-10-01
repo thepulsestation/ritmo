@@ -20,6 +20,28 @@ test('an active overrun occupies its elapsed time and cannot be covered by a dra
  const blocks=calendarBlocks([a],'2099-09-30',null,new Date('2099-09-30T10:30:00+02:00'));
  assert.equal(blocks[0].end,630);assert.equal(calendarConflicts([...blocks,block('b',615,645)]).length,1);
 });
+test('moving and placing joins off-grid neighbor edges before rounding to five minutes',()=>{
+ const neighbors=[block('before',400,441),block('after',481,520)];
+ assert.deepEqual(snapGesture({mode:'move',start:460,minutes:30,delta:-20,neighbors}),{start:441,minutes:30});
+ assert.deepEqual(snapGesture({mode:'move',start:430,minutes:30,delta:20,neighbors}),{start:451,minutes:30});
+ assert.deepEqual(snapGesture({mode:'place',start:0,minutes:30,delta:0,target:442.4,neighbors}),{start:441,minutes:30});
+ assert.deepEqual(snapGesture({mode:'move',start:600,minutes:30,delta:13,neighbors}),{start:615,minutes:30});
+ // A deliberate overlap farther from an edge remains visible and prevents saving.
+ const overlap=snapGesture({mode:'move',start:460,minutes:30,delta:-30,neighbors});
+ assert.equal(overlap.start,430);assert.equal(calendarConflicts([...neighbors,block('moving',overlap.start,overlap.start+overlap.minutes)]).length,1);
+});
+test('resizing either edge joins exact minutes from either side without moving the opposite edge',()=>{
+ const neighbors=[block('before',400,441),block('after',481,520)];
+ for(const delta of [-10,-6])assert.deepEqual(snapGesture({mode:'resize-start',start:450,minutes:25,delta,neighbors}),{start:441,minutes:34});
+ for(const delta of [10,14])assert.deepEqual(snapGesture({mode:'resize-end',start:450,minutes:19,delta,neighbors}),{start:450,minutes:31});
+ assert.deepEqual(snapGesture({mode:'resize-start',start:600,minutes:30,delta:13,neighbors}),{start:615,minutes:15});
+});
+test('magnetic edges respect minimum duration, maximum duration and midnight',()=>{
+ assert.deepEqual(snapGesture({mode:'resize-start',start:440,minutes:10,delta:7,neighbors:[block('a',400,447)]}),{start:445,minutes:5});
+ assert.deepEqual(snapGesture({mode:'resize-end',start:441,minutes:10,delta:-7,neighbors:[block('a',444,480)]}),{start:441,minutes:5});
+ assert.deepEqual(snapGesture({mode:'resize-start',start:800,minutes:30,delta:-692,neighbors:[block('a',0,108)]}),{start:110,minutes:720});
+ assert.deepEqual(snapGesture({mode:'place',start:0,minutes:60,delta:0,target:1380,neighbors:[block('a',1340,1381)]}),{start:1379,minutes:60});
+});
 test('draft recovery preserves original goals and reviewed blocks are read-only',()=>{
  const a={id:'a',title:'Correo',category:'work',status:'deferred',starts_at:'2099-09-30T12:44:00+02:00',ends_at:'2099-09-30T12:45:00+02:00',goal_starts_at:'2099-09-30T12:30:00+02:00',goal_ends_at:'2099-09-30T12:45:00+02:00',updated_at:'2099-01-01T00:00:00Z'};
  const d=calendarDraft([a],'2099-09-30');assert.equal(d.items[0].minutes,15);assert.equal(d.items[0].placed,false);assert.equal(calendarBlocks([a],'2099-09-30',d).length,0);Object.assign(d.items[0],{placed:true,start:900});assert.equal(calendarBlocks([a],'2099-09-30',d)[0].start,900);assert.equal(a.starts_at,'2099-09-30T12:44:00+02:00');
@@ -33,16 +55,18 @@ test('partial continuations and untracked completions cannot create a full-task 
  const h=rhythmInsights([occurrence(1,30),occurrence(2,4,{status:'continued'}),occurrence(3,20,{actual_start:null}),occurrence(4,10,{source_task_id:'t2',recurrence:'none'})])[0];assert.equal(h.count,1);assert.equal(h.suggestion,null);assert.equal(h.improvement,null);
 });
 test('short taps keep the click target; releasing a drag uses the final pointer position before the next animation frame',()=>{
- const names=['document','window','requestAnimationFrame','cancelAnimationFrame'],saved=names.map(k=>[k,globalThis[k]]),listeners={};let captured=0,changes=0;
+ const names=['document','window','requestAnimationFrame','cancelAnimationFrame'],saved=names.map(k=>[k,globalThis[k]]),listeners={};let captured=0,changes=0,neighbors=[];
  const source={dataset:{id:'a',calDrag:'move'},classList:{add(){},remove(){}},setPointerCapture(){captured++;}};
  const item={id:'a',start:600,minutes:30,placed:true},draft={items:[item]},ghost={setAttribute(){},style:{}};
  const grid={getBoundingClientRect:()=>({top:0})},scroll={getBoundingClientRect:()=>({top:0,bottom:2200,left:0,right:400}),scrollTop:0};
  try{
   globalThis.document={addEventListener:(name,fn)=>listeners[name]=fn,getElementById:id=>({'calendar-grid':grid,'calendar-scroll':scroll,'calendar-ghost':ghost})[id]};
   globalThis.window={innerHeight:2400,scrollBy(){}};globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=()=>{};
-  bindCalendarGestures({getDraft:()=>draft,onChange:()=>changes++,onMessage:()=>{}});
+  bindCalendarGestures({getDraft:()=>draft,getBlocks:()=>neighbors,onChange:()=>changes++,onMessage:()=>{}});
   const e=(y,type='mouse')=>({pointerId:1,clientX:100,clientY:y,button:0,isPrimary:true,pointerType:type,target:{closest:()=>source},preventDefault(){}});
   listeners.pointerdown(e(600*PIXELS_PER_MINUTE));listeners.pointerup(e(600*PIXELS_PER_MINUTE));assert.equal(captured,0);assert.equal(changes,0);
   listeners.pointerdown(e(600*PIXELS_PER_MINUTE));listeners.pointermove(e(606*PIXELS_PER_MINUTE));listeners.pointerup(e(615*PIXELS_PER_MINUTE));assert.equal(captured,1);assert.equal(changes,1);assert.equal(item.start,615);assert.equal(item.minutes,30);
+  item.start=600;neighbors=[block('before',570,616)];listeners.pointerdown(e(600*PIXELS_PER_MINUTE));listeners.pointermove(e(606*PIXELS_PER_MINUTE));listeners.pointerup(e(615*PIXELS_PER_MINUTE));assert.equal(item.start,616);assert.equal(item.minutes,30);
+  item.start=600;neighbors=[block('a',570,601)];listeners.pointerdown(e(600*PIXELS_PER_MINUTE));listeners.pointermove(e(604*PIXELS_PER_MINUTE));listeners.pointerup(e(601*PIXELS_PER_MINUTE));assert.equal(item.start,600);
  }finally{for(const [k,v]of saved)if(v===undefined)delete globalThis[k];else globalThis[k]=v;}
 });
