@@ -1,4 +1,4 @@
-import {escapeHtml as esc,CATEGORIES,STATUS,dateKey,taskDay,timeLabel,goalDuration,duration,formatDuration,organizerItems} from './domain.js?v=14';
+import {escapeHtml as esc,CATEGORIES,STATUS,dateKey,taskDay,timeLabel,goalDuration,duration,formatDuration,organizerItems} from './domain.js?v=15';
 export const PIXELS_PER_MINUTE=6;
 export const clockMinutes=iso=>{const [h,m]=timeLabel(iso).split(':').map(Number);return h*60+m;};
 export const minuteClock=n=>`${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`;

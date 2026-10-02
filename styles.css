@@ -43,3 +43,15 @@ html,body{max-width:100%;overflow-x:clip}.shell,.main,.layout>*,.page-card,.card
 
 /* Swipe actions stay inside each card so the page only scrolls vertically. */
 .swipe-hint{font-size:.82rem;line-height:1.5;color:var(--muted);margin:0 0 14px}.task-swipe{position:relative;overflow:hidden;border-radius:13px;min-width:0}.task-swipe>.task-row{position:relative;z-index:1;touch-action:pan-y pinch-zoom;-webkit-touch-callout:none;user-select:none;-webkit-user-select:none;transform:translateX(var(--swipe-x,0px));transition:transform .18s ease}.task-swipe.is-open{--swipe-x:-96px}.task-swipe.is-dragging>.task-row{transition:none}.task-swipe-actions{position:absolute;inset:0 0 0 auto;width:96px;display:flex;background:#ae3030;visibility:hidden}.task-swipe.is-open .task-swipe-actions,.task-swipe.is-dragging .task-swipe-actions{visibility:visible}.swipe-delete{width:100%;border:0;background:transparent;color:#fff;font-weight:600;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:12px 6px;font-size:.88rem}.swipe-delete:disabled{cursor:wait}.swipe-delete:focus-visible{outline:3px solid white;outline-offset:-5px}.task-row-actions{display:grid;justify-items:center;gap:10px}.task-swipe-toggle{border:1px solid var(--line);background:white;border-radius:50%;width:34px;height:34px;display:grid;place-items:center;color:var(--muted);font-weight:700;font-size:1.2rem;line-height:1}.toast-undo{border:0;background:transparent;color:var(--lime);font-weight:700;padding:6px 4px;margin-left:14px;min-height:36px;text-decoration:underline}@media(prefers-reduced-motion:reduce){.task-swipe>.task-row{transition:none}}
+
+/* Swipe right postpones; full gestures expand the action behind the card. */
+.task-swipe.is-open.is-postpone{--swipe-x:96px}
+.task-swipe-actions,.task-swipe-tomorrow{width:min(100%,var(--reveal-width,96px))}
+.task-swipe-tomorrow{position:absolute;inset:0 auto 0 0;display:flex;background:#37675c;visibility:hidden}
+.task-swipe.is-postpone .task-swipe-actions{visibility:hidden}
+.task-swipe.is-postpone.is-open .task-swipe-tomorrow,.task-swipe.is-postpone.is-dragging .task-swipe-tomorrow{visibility:visible}
+.swipe-postpone{width:100%;border:0;background:transparent;color:#fff;font-weight:600;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:12px 6px;font-size:.88rem}
+.swipe-postpone:disabled{cursor:wait}.swipe-postpone:focus-visible{outline:3px solid white;outline-offset:-5px}
+.swipe-release{display:none;max-width:180px;text-align:center}.task-swipe.is-armed .swipe-label{display:none}.task-swipe.is-armed .swipe-release{display:block}
+.extension-presets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:14px 0}.extension-presets .btn{min-width:0;padding:10px 5px;font-size:.85rem}
+.decision-list{margin:22px 0;padding:18px;border:1px solid var(--line);border-radius:12px;background:#f8faf5}.decision-list h3{font-size:1rem;margin-bottom:12px}.decision-list p{line-height:1.6;font-size:.88rem;margin:12px 0;overflow-wrap:anywhere}
