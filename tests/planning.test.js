@@ -1,6 +1,6 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';
 import {formatDuration,parsePlan,summaryText,unplacedTasks} from '../domain.js';
-import {planInstructions,routineCandidates,agendaContext,chatSummary,allForChat} from '../planning.js';
+import {planInstructions,routineCandidates,agendaContext,chatSummary,allForChat,taskDecisions} from '../planning.js';
 const habit='00000000-0000-0000-0000-000000000001',series='00000000-0000-0000-0000-000000000002',id='00000000-0000-0000-0000-000000000003';
 const task=(day,extra={})=>({id,routine_id:habit,repeat_series_id:series,title:'Salir sin redes',category:'personal',priority:'alta',status:'pending',starts_at:day+'T09:00:00+02:00',ends_at:day+'T09:20:00+02:00',goal_starts_at:day+'T07:00:00+02:00',goal_ends_at:day+'T07:10:00+02:00',recurrence:'weekly',recurrence_days:[1,2,3,4,5],notes:'Zapatos preparados',...extra});
 const context=text=>JSON.parse(text.slice(text.indexOf('{')));
@@ -55,8 +55,25 @@ test('summary highlights unplaced work with source references once, without reco
  const text=chatSummary(rows,'2026-09-30'),section=text.split('Tareas que quedaron sin hueco')[1].split('Otros pendientes')[0];
  const data=JSON.parse(section.slice(section.indexOf('[')));
  assert.equal(data.length,2);assert.equal(data[0].source_task_id,id);assert.equal(data[0].scheduling_state,'sin_hueco');assert.equal(data[0].routine_id,habit);assert.equal(data[0].start,'07:00');assert.equal(data[1].source_day,'2026-09-29');assert.equal(data[1].partial_continuation,true);
- assert.equal((text.match(new RegExp('"source_task_id": "'+id+'"','g'))||[]).length,1);assert.doesNotMatch(text,/Eliminada no recuperar|Futuro sin hueco/);
+ assert.equal((text.match(new RegExp('"source_task_id": "'+id+'"','g'))||[]).length,1);assert.doesNotMatch(section,/Eliminada no recuperar|Futuro sin hueco/);assert.match(text,/"decision": "eliminada"/);
  const rescheduled=task('2026-10-01',{id:'child',source_task_id:id});
  assert.doesNotMatch(chatSummary([{...deferred,status:'postponed'},rescheduled],'2026-09-30'),/"scheduling_state": "sin_hueco"/);
  assert.match(planInstructions('2026-10-01'),/recuperar, dejar pendientes o descartar/);
+});
+
+test('postponed occurrences export their existing identity and suppress a duplicate daily routine',()=>{
+ const parent=task('2026-10-02',{status:'postponed',recurrence:'daily',recurrence_days:[1,2,3,4,5,6,7]});
+ const child=task('2026-10-03',{id:'00000000-0000-0000-0000-000000000004',source_task_id:parent.id,status:'deferred',recurrence:'none',recurrence_days:[],repeat_series_id:'00000000-0000-0000-0000-000000000005',carry_series_id:series});
+ const out=context(agendaContext([parent,child],'2026-10-02','2026-10-03'));
+ assert.equal(out.rutina_por_programar.length,0);assert.equal(out.agenda_guardada[0].existing_task_id,child.id);assert.equal(out.agenda_guardada[0].source_task_id,parent.id);assert.equal(out.agenda_guardada[0].editable,true);assert.equal(out.agenda_guardada[0].times_are_suggestions,true);
+ assert.equal(parsePlan(JSON.stringify({tasks:out.agenda_guardada}),'2026-10-03')[0].existing_task_id,child.id);
+ const next=context(agendaContext([parent,child],'2026-10-03','2026-10-04'));assert.equal(next.rutina_por_programar.length,1);
+});
+test('decisions distinguish deleted tasks from repeated postponements and follow their destination',()=>{
+ const a=task('2026-10-01',{id:'a',status:'postponed'}),b=task('2026-10-02',{id:'b',source_task_id:'a',status:'postponed'}),c=task('2026-10-03',{id:'c',source_task_id:'b',status:'deferred'}),removed=task('2026-10-02',{id:'removed',status:'deleted',deleted_from_status:'pending'});
+ const rows=[a,b,c,removed],decisions=taskDecisions(rows,'2026-10-02');
+ assert.equal(decisions.postponed[0].postponement_count,2);assert.equal(decisions.postponed[0].target_day,'2026-10-03');assert.equal(decisions.postponed[0].needs_scheduling,true);assert.equal(decisions.deleted[0].recover_automatically,false);
+ const exportText=allForChat(rows,'2026-10-02','2026-10-03');assert.match(exportText,/"postponement_count": 2/);assert.match(exportText,/"decision": "eliminada"/);assert.doesNotMatch(exportText.split('Otros pendientes')[1].split('Decisiones:')[0],/"title"/);
+ // An undo restores the original and removes the cancelled destination: neither decision remains.
+ assert.deepEqual(taskDecisions([{...a,status:'pending'}],'2026-10-01'),{postponed:[],deleted:[]});
 });

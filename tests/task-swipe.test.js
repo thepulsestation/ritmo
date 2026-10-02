@@ -7,14 +7,15 @@ import {bindTaskSwipes} from '../task-swipe.js';
 // Dispatch actual handlers against a minimal DOM, including capture/bubble order.
 function fixture(touchEvents=false){
   let time=0;
-  const handlers=new Map(),nodes=[];
+  const handlers=new Map(),nodes=[],commits=[];
   const root={querySelectorAll:()=>nodes,addEventListener(type,fn,options={}){const list=handlers.get(type)||[];list.push({fn,capture:options.capture});handlers.set(type,list);}};
   function row(){
     const classes=new Set(),props=new Map(),attrs=new Map(),toggleAttrs=new Map();
     const actions={inert:true,setAttribute:(k,v)=>attrs.set(k,v)};
+    const tomorrowAttrs=new Map(),tomorrow={inert:true,setAttribute:(k,v)=>tomorrowAttrs.set(k,v)};
     const toggle={setAttribute:(k,v)=>toggleAttrs.set(k,v),closest(selector){if(selector==='.task-swipe')return node;if(selector==='.task-row')return card;if(selector==='button,a'||selector==='button,a,input,select,textarea'||selector==='[data-action="swipe-toggle"]')return toggle;return null;}};
     const card={capture:null,setPointerCapture(id){this.capture=id;},closest(selector){if(selector==='.task-swipe')return node;if(selector==='.task-row')return card;return null;}};
-    const node={isConnected:true,classList:{add:v=>classes.add(v),remove:v=>classes.delete(v),contains:v=>classes.has(v),toggle(v,on){if(on)classes.add(v);else classes.delete(v);}},style:{setProperty:(k,v)=>props.set(k,v),removeProperty:k=>props.delete(k)},querySelector:s=>s==='.task-swipe-actions'?actions:toggle,card,toggle,actions,props,attrs,toggleAttrs};
+    const node={isConnected:true,getBoundingClientRect:()=>({width:300}),classList:{add:v=>classes.add(v),remove:v=>classes.delete(v),contains:v=>classes.has(v),toggle(v,on){if(on)classes.add(v);else classes.delete(v);}},style:{setProperty:(k,v)=>props.set(k,v),removeProperty:k=>props.delete(k)},querySelector:s=>s==='.task-swipe-actions'?actions:s==='.task-swipe-tomorrow'?tomorrow:toggle,card,toggle,actions,tomorrow,tomorrowAttrs,props,attrs,toggleAttrs};
     nodes.push(node);return node;
   }
   function fire(type,target,options={}){
@@ -22,8 +23,8 @@ function fixture(touchEvents=false){
     for(const handler of [...(handlers.get(type)||[])].sort((a,b)=>Number(b.capture||false)-Number(a.capture||false))){handler.fn(event);if(event.stopped)break;}
     return event;
   }
-  bindTaskSwipes({root,now:()=>time,touchEvents});
-  return {root,row,fire,advance:ms=>{time+=ms;},outside:{closest:()=>null}};
+  bindTaskSwipes({root,now:()=>time,touchEvents,onCommit:(row,direction)=>commits.push({row,direction})});
+  return {root,row,fire,commits,advance:ms=>{time+=ms;},outside:{closest:()=>null}};
 }
 function swipe(f,row,start,end){f.fire('pointerdown',row.card,{clientX:start});f.fire('pointermove',row.card,{clientX:end});return f.fire('pointerup',row.card,{clientX:end});}
 
@@ -42,13 +43,14 @@ test('short left swipe snaps shut and right swipe closes an open row',()=>{
   swipe(f,r,200,80);swipe(f,r,100,210);
   assert.equal(r.classList.contains('is-open'),false);assert.equal(r.attrs.get('aria-hidden'),'true');
 });
-test('vertical movement and right swipe on a closed row leave native scrolling untouched',()=>{
+test('vertical movement leaves native scrolling untouched; right swipe reveals tomorrow',()=>{
   const f=fixture(),r=f.row();f.fire('pointerdown',r.card);
   const move=f.fire('pointermove',r.card,{clientX:202,clientY:145});
   assert.equal(move.defaultPrevented,false);assert.equal(r.card.capture,null);
   f.fire('pointerup',r.card,{clientX:80,clientY:150});
   assert.equal(r.classList.contains('is-open'),false);
-  assert.equal(swipe(f,r,100,210).defaultPrevented,false);
+  assert.equal(swipe(f,r,100,210).defaultPrevented,true);
+  assert.equal(r.classList.contains('is-postpone'),true);assert.equal(r.tomorrow.inert,false);assert.equal(r.actions.inert,true);assert.equal(f.commits.length,0);
 });
 test('cancelled gestures restore the initial state and discard temporary offsets',()=>{
   const f=fixture(),r=f.row();
@@ -141,6 +143,27 @@ test('a new deliberate tap clears drag click suppression without waiting',()=>{
   assert.equal(f.fire('click',r.card).stopped,true);
   finger(f,'touchstart',r.card,80);finger(f,'touchend',r.card,80);f.fire('click',r.card);
   assert.equal(clicks,1);
+});
+
+test('full swipes commit the correct action once, only on release, and suppress the trailing tap',()=>{
+  for(const [end,direction]of [[0,'delete'],[400,'tomorrow']]){
+    const f=fixture(),r=f.row();f.fire('pointerdown',r.card);
+    f.fire('pointermove',r.card,{clientX:end});assert.equal(f.commits.length,0);assert.equal(r.classList.contains('is-armed'),true);
+    f.fire('pointerup',r.card,{clientX:end});f.fire('pointerup',r.card,{clientX:end});
+    assert.deepEqual(f.commits,[{row:r,direction}]);assert.equal(r.classList.contains('is-open'),false);assert.equal(r.props.size,0);
+    assert.equal(f.fire('click',r.card).stopped,true);
+  }
+});
+test('retreating from the full-swipe threshold reveals the button without committing',()=>{
+  const f=fixture(),r=f.row();f.fire('pointerdown',r.card);f.fire('pointermove',r.card,{clientX:0});
+  f.fire('pointerup',r.card,{clientX:100});assert.equal(f.commits.length,0);assert.equal(r.classList.contains('is-open'),true);assert.equal(r.classList.contains('is-armed'),false);
+  swipe(f,r,100,400);assert.equal(r.classList.contains('is-open'),false);assert.equal(f.commits.length,0);
+});
+test('cancelled full swipes never commit; the Safari stream commits independently of pointer cancellation',()=>{
+  const f=fixture(true),r=f.row();finger(f,'touchstart',r.card,40);finger(f,'touchmove',r.card,290);f.fire('touchcancel',r.card);
+  assert.equal(f.commits.length,0);assert.equal(r.classList.contains('is-open'),false);
+  finger(f,'touchstart',r.card,40);finger(f,'touchmove',r.card,290);f.fire('pointercancel',r.card,{pointerType:'touch'});
+  finger(f,'touchend',r.card,290);assert.deepEqual(f.commits,[{row:r,direction:'tomorrow'}]);
 });
 
 const app=readFileSync(new URL('../app.js',import.meta.url),'utf8');
